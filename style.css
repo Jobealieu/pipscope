@@ -97,6 +97,13 @@ button:focus-visible { outline: 1px solid var(--accent); outline-offset: 2px; }
 .prob { font-size: 22px; }
 .tag { justify-self: start; padding: 2px 8px; border: 1px solid currentColor; font-size: 11px; letter-spacing: 0.1em; }
 
+.entry { padding: 8px 10px; border: 1px solid var(--line); font-weight: 700; margin-bottom: 4px; }
+.entry.wait { color: var(--dim); }
+.entry.go { color: var(--bg); border-color: transparent; animation: pulse 1.2s ease-in-out infinite; }
+.entry.go.up { background: var(--accent); }
+.entry.go.down { background: var(--down); }
+@keyframes pulse { 50% { opacity: 0.78; } }
+
 .kv { display: grid; grid-template-columns: 1fr auto; gap: 4px 12px; }
 .kv dt { color: var(--dim); }
 .kv dd { text-align: right; }
@@ -141,5 +148,5 @@ button:focus-visible { outline: 1px solid var(--accent); outline-offset: 2px; }
   #chart { min-height: 340px; }
 }
 @media (prefers-reduced-motion: reduce) {
-  .cursor, .boot p:last-child::after { animation: none; }
+  .cursor, .boot p:last-child::after, .entry.go { animation: none; }
 }

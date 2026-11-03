@@ -5,6 +5,7 @@ const TFS = ['5m', '1h'];
 const PAYOUT = 0.8; // typical binary-option payout; breakeven win rate = 1 / (1 + payout)
 const BREAKEVEN = 1 / (1 + PAYOUT);
 const SESSIONS = [['SYD', 21, 6], ['TYO', 0, 9], ['LDN', 7, 16], ['NYC', 12, 21]];
+const ENTRY_WINDOW = { '5m': 30, '1h': 180 }; // seconds after candle open where entering still matches the backtested bet
 const LABELS = {
   ret1: 'last candle move', ret3: '3-candle momentum', ret6: '6-candle momentum', ret12: '12-candle momentum',
   rsi14: 'RSI 14', rsi3: 'RSI 3 (short-term stretch)', macdHist: 'MACD histogram', ema9_21: 'EMA 9 vs 21',
@@ -26,7 +27,15 @@ const state = {
   models: {}, // `${pair}|${tf}` -> { key, model, stats }
   view: null,
   busy: false,
+  lastRun: 0,
 };
+
+// The call is for the candle after the last CLOSED one. Yahoo may not have published that candle yet,
+// so derive its start time instead of waiting for it.
+function timing(v, now = Date.now() / 1000) {
+  const p = PERIOD[v.tf], target = v.forming ? v.forming.t : v.bars.at(-1).t + p, left = target + p - now;
+  return { target, left, elapsed: now - target, closed: left < -2 * p };
+}
 let chart, candleSeries, e21Series, e50Series;
 
 // ---------- data + model ----------
@@ -51,6 +60,7 @@ async function load(pair, tf, onStep) {
 async function run(showLoading) {
   if (state.busy) return;
   state.busy = true;
+  state.lastRun = Date.now();
   const pair = state.pair;
   const steps = [];
   const onStep = s => { steps.push(s); if (showLoading) renderBoot(steps); };
@@ -74,10 +84,11 @@ async function run(showLoading) {
 function recordSignals(views) {
   const log = JSON.parse(localStorage.log || '[]');
   for (const v of views) {
-    if (v.forming) {
-      const id = `${v.pair}|${v.tf}|${v.forming.t}`;
+    const tm = timing(v);
+    if (!tm.closed && tm.left > 0) {
+      const id = `${v.pair}|${v.tf}|${tm.target}`;
       if (!log.some(e => e.id === id)) {
-        log.push({ id, pair: v.pair, tf: v.tf, t: v.forming.t, ref: v.bars.at(-1).c, up: v.pred.p > 0.5, p: v.pred.p, hi: Math.abs(v.pred.p - 0.5) >= v.hiThr });
+        log.push({ id, pair: v.pair, tf: v.tf, t: tm.target, ref: v.bars.at(-1).c, up: v.pred.p > 0.5, p: v.pred.p, hi: Math.abs(v.pred.p - 0.5) >= v.hiThr });
       }
     }
     for (const e of log) {
@@ -116,7 +127,7 @@ function renderError(e) {
 function render(fresh) {
   const v = state.view[state.tf];
   const dp = v.pair.endsWith('JPY') ? 3 : 5;
-  const live = !!v.forming;
+  const live = !timing(v).closed;
 
   // chart
   const candles = [...v.bars, ...(v.forming ? [v.forming] : [])].map(b => ({ time: b.t, open: b.o, high: b.h, low: b.l, close: b.c }));
@@ -131,12 +142,14 @@ function render(fresh) {
   const { p } = v.pred, up = p > 0.5, conf = Math.max(p, 1 - p), hi = Math.abs(p - 0.5) >= v.hiThr;
   $('#v-title').textContent = live ? `> next ${v.tf} candle` : '> market closed, call for reopen';
   $('#verdict-body').innerHTML = `
+    <div id="entry" class="entry" role="status"></div>
     <div class="call ${up ? 'up' : 'down'}"><i class="ph-bold ph-arrow-fat-${up ? 'up' : 'down'}"></i><span id="call-text"></span></div>
     <div class="prob ${up ? 'up' : 'down'}">${pct(conf)} <span class="dim">probability</span></div>
     <span class="tag ${hi ? 'up' : 'dim'}">${hi ? 'HIGH CONVICTION' : 'LOW CONVICTION'}</span>
     <p class="dim">logistic ${pct(v.pred.lr)} up / boosted ${pct(v.pred.gb)} up</p>
     <p class="dim">close above ${v.bars.at(-1).c.toFixed(dp)} = UP</p>`;
   scramble($('#call-text'), up ? 'UP' : 'DOWN');
+  renderEntry();
 
   // multi-timeframe confluence
   const rows = TFS.map(tf => {
@@ -209,10 +222,31 @@ function tickClock() {
   $('#sessions').innerHTML = SESSIONS.map(([n, a, b]) => `<span class="${(a < b ? h >= a && h < b : h >= a || h < b) ? 'on' : ''}">${n}</span>`).join('');
   const v = state.view?.[state.tf];
   if (!v) return;
-  if (!v.forming) { $('#countdown').textContent = 'closed'; return; }
-  const left = v.forming.t + PERIOD[v.tf] - now / 1000;
-  $('#countdown').textContent = left > 0 ? `closes in ${hhmmss(left)}` : 'scoring...';
-  if (left < -5 && !state.busy) run(false); // candle closed: fetch, score the call, predict the next one
+  const tm = timing(v);
+  $('#countdown').textContent = tm.closed ? 'closed' : tm.left > 0 ? `closes in ${hhmmss(tm.left)}` : 'scoring...';
+  // Candle closed: fetch, score the call, predict the next one. Throttled in case Yahoo lags.
+  if (!tm.closed && tm.left < -3 && !state.busy && Date.now() - state.lastRun > 8000) run(false);
+  renderEntry();
+}
+
+// Tells the user whether entering now still matches the bet the backtest measured.
+function renderEntry() {
+  const el = $('#entry'), v = state.view?.[state.tf];
+  if (!el || !v) return;
+  const tm = timing(v), win = ENTRY_WINDOW[v.tf];
+  const up = v.pred.p > 0.5, hi = Math.abs(v.pred.p - 0.5) >= v.hiThr;
+  const other = state.view[TFS.find(t => t !== v.tf)], aligned = other.pred.p > 0.5 === up;
+  let cls = 'entry wait', text;
+  if (tm.closed) text = 'MARKET CLOSED. Calls resume when trading reopens.';
+  else if (tm.left <= 0) text = 'CANDLE CLOSED. New call in a few seconds.';
+  else if (tm.elapsed > win) text = `WAIT FOR NEXT CANDLE. Next call in ${hhmmss(tm.left)}.`;
+  else if (!hi) text = `LOW CONVICTION. Skip this candle. ${Math.ceil(win - tm.elapsed)}s`;
+  else {
+    cls = `entry go ${up ? 'up' : 'down'}`;
+    text = `ENTER NOW: ${up ? 'UP' : 'DOWN'}, ${v.tf === '5m' ? '5 min' : '1 hour'} expiry. ${Math.ceil(win - tm.elapsed)}s left${aligned ? '' : '. Timeframes disagree: smaller stake'}`;
+  }
+  el.className = cls;
+  el.textContent = text;
 }
 
 function init() {
