@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>PIPSCOPE // forex direction engine</title>
+  <meta name="description" content="Free forex direction probabilities for 5m and 1h candles, with honest out-of-sample backtests.">
+  <meta name="theme-color" content="#0a0d0b">
+  <link rel="icon" href="favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fontsource/jetbrains-mono@5.3.0/400.css" integrity="sha384-+aDSenDTh79o4iTbyqV1a0t7NimPoIJzYQwPxZf88ryw9Q9RgzJimk6jI+j2DR6q" crossorigin="anonymous">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fontsource/jetbrains-mono@5.3.0/700.css" integrity="sha384-2NiV67JrAv+LWaNRcWDQxPHOnpAE67h3e+J4VvLHzVsFq9NZ3S7q7Y4oSHUd2tTW" crossorigin="anonymous">
+  <link rel="stylesheet" href="https://unpkg.com/@phosphor-icons/web@2.1.2/src/bold/style.css" integrity="sha384-nblAP2mo2pVPyMQZDw9Xy9Cwgs9lowushAYep4w5+Q9kF4Ibf3n0B/gCMVdR+Vqy" crossorigin="anonymous">
+  <link rel="stylesheet" href="style.css">
+  <script src="https://unpkg.com/lightweight-charts@5.2.1/dist/lightweight-charts.standalone.production.js" integrity="sha384-KkYqTZlM13Zya6fVUF3IGCBOQ1ehFeJVVgxaVvD/0MebineF9EI8Jkd3NnWNChqN" crossorigin="anonymous" defer></script>
+  <script type="module" src="app.js"></script>
+</head>
+<body>
+  <header class="bar">
+    <div class="brand">PIPSCOPE<span class="cursor">_</span></div>
+    <nav class="pairs" id="pairs" aria-label="Currency pair"></nav>
+    <div class="tf" role="group" aria-label="Timeframe">
+      <button data-tf="5m">5M</button><button data-tf="1h">1H</button>
+    </div>
+    <div class="sessions" id="sessions" aria-label="Trading sessions"></div>
+    <div class="clock" id="clock">--:--:-- UTC</div>
+  </header>
+
+  <main class="grid">
+    <section class="panel chart-panel" aria-label="Price chart">
+      <div class="panel-head">
+        <span id="chart-title">&gt; chart</span>
+        <span class="legend"><i class="sw e21"></i>EMA21 <i class="sw e50"></i>EMA50</span>
+      </div>
+      <div id="chart"></div>
+    </section>
+
+    <section class="panel verdict" aria-live="polite">
+      <div class="panel-head"><span id="v-title">&gt; next candle</span><span id="countdown" class="dim">--:--</span></div>
+      <div id="verdict-body" class="verdict-body"></div>
+    </section>
+
+    <section class="panel confluence">
+      <div class="panel-head"><span>&gt; multi-timeframe</span></div>
+      <div id="confluence"></div>
+    </section>
+
+    <section class="panel indicators">
+      <div class="panel-head"><span>&gt; indicators</span></div>
+      <dl id="indicators" class="kv"></dl>
+    </section>
+
+    <section class="panel backtest">
+      <div class="panel-head"><span>&gt; out-of-sample backtest</span><span class="dim" id="bt-n"></span></div>
+      <div id="backtest"></div>
+    </section>
+
+    <section class="panel drivers">
+      <div class="panel-head"><span>&gt; why this call</span></div>
+      <div id="drivers"></div>
+    </section>
+
+    <section class="panel log">
+      <div class="panel-head"><span>&gt; live track record</span><span class="dim" id="log-rate"></span></div>
+      <div id="log"></div>
+    </section>
+  </main>
+
+  <footer class="foot">
+    Probabilities, not promises. Not financial advice. Data: Yahoo Finance, delayed and unofficial.
+    Charts by <a href="https://www.tradingview.com/" rel="noopener">TradingView Lightweight Charts</a>.
+  </footer>
+</body>
+</html>
